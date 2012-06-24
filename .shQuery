@@ -1,0 +1,1935 @@
+#!/bin/bash
+#
+#===============================================================================
+#
+#         File: .shquery
+#
+#        Usage: . .shQuery
+#
+#  Description: 
+#
+#       Author: Andy Harrison (tld=com,domain=gmail,uid=aharrison)
+#      Version: $Id$
+#
+#===============================================================================
+
+export SUDO_PROMPT="Enter password for %u: "
+
+CPANMIRROR=http://mirror.metrocast.net/cpan
+
+_S_TZ=`date "+%Z"`
+
+[ -r "${HOME}/.tcshrc.d/etc/podlist.txt" ] &&
+    export PODLIST=$HOME/.tcshrc.d/etc/podlist.txt
+
+
+export _S_OS="`uname -s 2> /dev/null`"
+
+[ -e "${HOME}/.shQuery.d" -a -r "${HOME}/.shQuery.d" ] && 
+    _SHQDIR="${HOME}/.shQuery.d" &&
+        [ -d "${_SHQDIR}/.shQuery.d/bin" ] &&
+            _SHQBIN="${_SHQDIR}/.shQuery.d/bin"
+
+# {{{ initANSI
+#
+# ANSI Color -- use these variables to easily have different
+# color and format output. Make sure to output the reset
+# sequence after colors (f = foreground, b = background),
+# and use the 'off' feature for anything you turn on.
+#
+# Credit: 
+#
+# Dave Taylor, Wicked Cool Shell Scripts
+#
+# http://www.intuitive.com/wicked/
+#
+
+initANSI() {
+
+           esc=""
+
+        blackf="${esc}[30m"
+          redf="${esc}[31m"
+        greenf="${esc}[32m"
+       yellowf="${esc}[33m"
+         bluef="${esc}[34m"
+       purplef="${esc}[35m"
+         cyanf="${esc}[36m"
+        whitef="${esc}[37m"
+
+        blackb="${esc}[40m"
+          redb="${esc}[41m"
+        greenb="${esc}[42m"
+       yellowb="${esc}[43m"
+         blueb="${esc}[44m"
+       purpleb="${esc}[45m"
+         cyanb="${esc}[46m"
+        whiteb="${esc}[47m"
+
+        boldon="${esc}[1m"
+       boldoff="${esc}[22m"
+     italicson="${esc}[3m"
+    italicsoff="${esc}[23m"
+          ulon="${esc}[4m"
+         uloff="${esc}[24m"
+         invon="${esc}[7m"
+        invoff="${esc}[27m"
+
+         reset="${esc}[0m"
+}
+
+# }}}
+
+# {{{ pause
+#
+pause() {
+
+    _S_PROMPT=$*
+
+    [ -n "${_S_PROMPT}" ] && echo && echo "${_S_PROMPT}"
+
+    echo -n "[Enter] : "
+    read PAUSE
+
+    echo
+
+}
+# }}}
+
+# {{{ continue_yorn
+#
+continue_yorn() {
+
+    _S_PROMPT=${*:-"\nContinue"}
+    _S_PROMPT=${_S_PROMPT:+"\n${_S_PROMPT} [N/y] ? : "}
+
+    while :
+        do
+            printf "${_S_PROMPT}"
+
+            read CHYorN
+
+            case ${CHYorN} in
+
+                y|Y) return 0 ;;
+                *)   return 1 ;;
+
+            esac
+
+        done
+
+}
+# }}}
+
+# {{{ function die
+#
+die() {
+
+    local EXIT_STATUS=$1
+    shift
+    echo "$*"
+    exit ${EXIT_STATUS}
+
+}
+# }}}
+
+# {{{ function warn
+#
+warn() {
+
+    echo "-------------"
+    echo -n "WARNING: "
+    echo "$*"
+    echo "-------------"
+
+    sleep 1
+
+}
+# }}}
+
+# {{{ function warnp
+#
+warnp() {
+
+    echo "-------------"
+    echo -n "WARNING: "
+    echo "$*"
+
+    pause
+
+}
+# }}}
+
+# {{{ function _S_alert
+#
+_S_alert() {
+
+#   echo "-------------"
+#   echo "$*"
+#   echo "-------------"
+
+    if [ -n "${_S_BATCHMODE}" ] ; then
+        echo
+        echo
+        echo "-------------"
+        echo "$*"
+        echo "-------------"
+        echo
+    else
+        pause "$*"
+    fi
+
+
+}
+# }}}
+
+# {{{ command paths
+
+# {{{ _findbin
+#
+_findbin() {
+
+
+    cmd=$1
+
+    saveIFS=$IFS
+    IFS=":"
+
+    RET=1
+
+    for CURDIR in $PATH
+        do
+            if [ -x "${CURDIR}/$cmd" ] ; then
+                RET=0
+            fi
+        done
+
+    IFS="${saveIFS}"
+
+    return $RET
+
+}
+
+# }}}
+
+# {{{ _shqbin
+#
+_shqbin() {
+
+    cmd=$1
+
+    if [ -n "${_SHQBIN}" -a -x "${_SHQBIN}/${cmd}" ] ; then
+        return
+    else
+        return 1
+    fi
+
+}
+
+# }}}
+
+# {{{ function basename_path
+#
+basename_path() {
+
+    if _shqbin "basename" ; then
+        _S_BASENAME=${_SHQBIN}/basename
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_BASENAME=/usr/local/bin/basename
+        [ -x "${_S_BASENAME}" ] || _S_BASENAME=/usr/local/bin/basename
+        [ -x "${_S_BASENAME}" ] || _S_BASENAME=/usr/sfw/bin/basename
+        [ -x "${_S_BASENAME}" ] || _S_BASENAME=/usr/xpg4/bin/basename
+
+    else
+
+        _S_BASENAME=`which basename 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_BASENAME}" ] || _S_BASENAME=/usr/bin/basename
+    [ -x "${_S_BASENAME}" ] || _S_BASENAME=/bin/basename
+
+    [ -x "${_S_BASENAME}" ] && return
+
+    _S_BASENAME=basename
+
+    if ! _findbin $_S_BASENAME ; then
+        die 1 "basename not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function sed_path
+#
+sed_path() {
+
+    if _shqbin "sed" ; then
+        _S_SED=${_SHQBIN}/sed 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_SED=/usr/local/bin/sed
+        [ -x "${_S_SED}" ] || _S_SED=/usr/local/bin/gsed
+        [ -x "${_S_SED}" ] || _S_SED=/usr/sfw/bin/gsed
+        [ -x "${_S_SED}" ] || _S_SED=/usr/sfw/bin/sed
+        [ -x "${_S_SED}" ] || _S_SED=/usr/xpg4/bin/sed
+
+    else
+
+        _S_SED=`which sed 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_SED}" ] || _S_SED=/usr/bin/sed
+    [ -x "${_S_SED}" ] || _S_SED=/bin/sed
+
+    [ -x "${_S_SED}" ] && return
+
+    _S_SED=sed
+
+    if ! _findbin $_S_SED ; then
+        die 1 "sed not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function find_path
+#
+find_path() {
+
+    if _shqbin "find" ; then
+        _S_FIND=${_SHQBIN}/find 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_FIND=/usr/local/bin/find
+        [ -x "${_S_FIND}" ] || _S_FIND=/usr/local/bin/gfind
+        [ -x "${_S_FIND}" ] || _S_FIND=/usr/sfw/bin/gfind
+        [ -x "${_S_FIND}" ] || _S_FIND=/usr/sfw/bin/find
+
+        [ -x "${_S_FIND}" ] || warn "GNU find not found, trying to fall back to stock Sun version..."
+
+        [ -x "${_S_FIND}" ] || _S_FIND=/usr/xpg4/bin/find
+
+    else
+
+        _S_FIND=`which find 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_FIND}" ] || _S_FIND=/usr/bin/find
+    [ -x "${_S_FIND}" ] || _S_FIND=/bin/find
+
+    [ -x "${_S_FIND}" ] && return
+    
+    _S_FIND=find
+
+    if ! _findbin ${_S_FIND} ; then
+        die 1 "find not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function xargs_path
+#
+xargs_path() {
+
+    if _shqbin "xargs" ; then
+        _S_XARGS=${_SHQBIN}/xargs 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_XARGS=/usr/local/bin/xargs
+        [ -x "${_S_XARGS}" ] || _S_XARGS=/usr/xpg4/bin/xargs
+        [ -x "${_S_XARGS}" ] || _S_XARGS=/usr/sfw/bin/xargs
+
+    else
+
+        _S_XARGS=`which xargs 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_XARGS}" ] || _S_XARGS=/usr/bin/xargs
+    [ -x "${_S_XARGS}" ] || _S_XARGS=/bin/xargs
+
+    [ -x "${_S_XARGS}" ] && return
+    
+    _S_XARGS=xargs
+
+    if ! _findbin ${_S_XARGS} ; then
+        die 1 "xargs not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function id_path
+#
+id_path() {
+
+    if _shqbin "id" ; then
+        _S_ID=${_SHQBIN}/id 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_ID=/usr/xpg4/bin/id
+        [ -x "${_S_ID}" ] || _S_ID=/usr/local/bin/id
+        [ -x "${_S_ID}" ] || _S_ID=/usr/sfw/bin/id
+
+    else
+
+        _S_ID=`which id 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_ID}" ] || _S_ID=/usr/bin/id
+    [ -x "${_S_ID}" ] || _S_ID=/bin/id
+
+    [ -x "${_S_ID}" ] && return
+    
+    _S_ID=id
+
+    if ! _findbin ${_S_ID} ; then
+        die 1 "id not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function editor_path
+#
+editor_path() {
+
+    [ -x "${EDITOR}" ] && return
+
+    if _shqbin "editor" ; then
+        _S_EDITOR=${_SHQBIN}/editor 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        EDITOR=/usr/local/bin/vim
+        [ -x "${EDITOR}" ] || EDITOR=/usr/sfw/bin/vim
+
+        [ -x "${EDITOR}" ] || EDITOR=`which vi 2>/dev/null`
+
+        [ -x "${EDITOR}" ] || EDITOR=/usr/local/bin/vi
+        [ -x "${EDITOR}" ] || EDITOR=/usr/sfw/bin/vi
+
+    else
+
+        EDITOR=`which vim 2>/dev/null`
+
+    fi
+
+    [ -x "${EDITOR}" ] || EDITOR=/usr/bin/vim
+    [ -x "${EDITOR}" ] || EDITOR=/bin/vim
+
+    [ -x "${EDITOR}" ] || EDITOR=/usr/bin/vi
+    [ -x "${EDITOR}" ] || EDITOR=/bin/vi
+
+    [ -x "${EDITOR}" ] && return
+    
+    EDITOR=vim
+
+    if ! _findbin ${EDITOR} ; then
+
+        EDITOR=vi
+
+        if ! _findbin ${EDITOR} ; then
+            die 1 "vim or vi command not found..."
+        fi
+
+    fi
+
+    VISUAL=$EDITOR
+
+}
+# }}}
+
+# {{{ function service_path
+#
+service_path() {
+
+    if _shqbin "svc" ; then
+        _S_SVC=${_SHQBIN}/svc 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _CMD=svc
+
+        release=`uname -r`
+        if [ "${release}" = "5.10" ] ; then
+
+            _S_SVC=/usr/local/bin/${_CMD}
+            [ -x "${_S_SVC}" ] || _S_SVC=/usr/local/sbin/${_CMD}
+            [ -x "${_S_SVC}" ] || _S_SVC=/usr/bin/${_CMD}
+            [ -x "${_S_SVC}" ] || _S_SVC=/usr/sbin/${_CMD}
+            [ -x "${_S_SVC}" ] || _S_SVC=/bin/${_CMD}
+            [ -x "${_S_SVC}" ] || _S_SVC=/sbin/${_CMD}
+
+        else
+            _S_INITD=true
+            _S_SVC="/etc/init.d/"
+        fi
+
+    else
+
+        _CMD=service
+
+        _S_SVC=`which service 2>/dev/null`
+
+        [ -x "${_S_SVC}" ] || _S_SVC=/usr/local/bin/${_CMD}
+        [ -x "${_S_SVC}" ] || _S_SVC=/usr/local/sbin/${_CMD}
+        [ -x "${_S_SVC}" ] || _S_SVC=/usr/bin/${_CMD}
+        [ -x "${_S_SVC}" ] || _S_SVC=/usr/sbin/${_CMD}
+        [ -x "${_S_SVC}" ] || _S_SVC=/bin/${_CMD}
+        [ -x "${_S_SVC}" ] || _S_SVC=/sbin/${_CMD}
+
+    fi
+
+    [ -z "${_S_INITD}" -a -x "${_S_SVC}" ] && return
+    
+    _S_SVC=${_CMD}
+
+    if ! _findbin ${_S_SVC} ; then
+        warn "${_CMD} command not found, use init.d scripts"
+        _S_INITD=true
+        _S_SVC="/etc/init.d/"
+    fi
+
+}
+# }}}
+
+# {{{ function cpio_path
+#
+cpio_path() {
+
+    if _shqbin "cpio" ; then
+        _S_CPIO=${_SHQBIN}/cpio 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+         _S_CPIO=/usr/local/bin/cpio
+        [ -x "${_S_CPIO}" ] || _S_CPIO=/usr/sfw/bin/cpio
+        [ -x "${_S_CPIO}" ] || _S_CPIO=/usr/xpg4/bin/cpio
+        [ -x "${_S_CPIO}" ] || _S_CPIO=`which cpio 2>/dev/null`
+
+    else
+
+        _S_CPIO=`which cpio 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_CPIO}" ] || _S_CPIO=/usr/bin/cpio
+    [ -x "${_S_CPIO}" ] || _S_CPIO=/bin/cpio
+
+    [ -x "${_S_CPIO}" ] && return
+    
+    _S_CPIO=cpio
+
+    if ! _findbin ${_S_CPIO} ; then
+        die 1 "cpio not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function rpm_path
+#
+rpm_path() {
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        warn "rpm command not available for ${_S_OS}"
+        return 1
+
+    else
+
+        if _shqbin "rpm" ; then
+            _S_RPM=${_SHQBIN}/rpm 
+            return
+        fi
+
+        _S_RPM=`which rpm 2>/dev/null`
+
+        [ -x "${_S_RPM}" ] || _S_RPM=/usr/bin/local/rpm
+        [ -x "${_S_RPM}" ] || _S_RPM=/bin/rpm
+        [ -x "${_S_RPM}" ] || _S_RPM=/usr/bin/rpm
+
+    fi
+
+    [ -x "${_S_RPM}" ] && return
+    
+    _S_RPM=rpm
+
+    if ! _findbin ${_S_RPM} ; then
+        die 1 "rpm command not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function rpmbuild_path
+#
+rpmbuild_path() {
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        warn "rpmbuild command not available for ${_S_OS}"
+
+        return 1
+
+    else
+
+        if _shqbin "rpm" ; then
+            _S_RPM=${_SHQBIN}/rpm 
+            return
+        fi
+
+        _S_RPMBUILD=`which rpmbuild 2>/dev/null`
+
+        [ -x "${_S_RPMBUILD}" ] || _S_RPMBUILD=/usr/bin/local/rpmbuild
+        [ -x "${_S_RPMBUILD}" ] || _S_RPMBUILD=/bin/rpmbuild
+        [ -x "${_S_RPMBUILD}" ] || _S_RPMBUILD=/usr/bin/rpmbuild
+
+    fi
+
+    [ -x "${_S_RPMBUILD}" ] && return
+    
+    _S_RPMBUILD=rpmbuild
+
+    if ! _findbin ${_S_RPMBUILD} ; then
+        die 1 "rpmbuild command not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function rpmrebuild_path
+#
+rpmrebuild_path() {
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        warn "rpmrebuild command not available for ${_S_OS}"
+
+        return 1
+
+    else
+
+        if _shqbin "rpmrebuild" ; then
+            _S_RPMREBUILD=${_SHQBIN}/rpmrebuild 
+            return
+        fi
+
+        _S_RPMREBUILD=`which rpmrebuild 2>/dev/null`
+
+        [ -x "${_S_RPMREBUILD}" ] || _S_RPMREBUILD=/usr/bin/local/rpmrebuild
+        [ -x "${_S_RPMREBUILD}" ] || _S_RPMREBUILD=/usr/bin/rpmrebuild
+        [ -x "${_S_RPMREBUILD}" ] || _S_RPMREBUILD=/bin/rpmrebuild
+
+    fi
+
+    [ -x "${_S_RPMREBUILD}" ] && return
+
+    _S_RPMREBUILD=rpmrebuild 
+    
+    if ! _findbin ${_S_RPMREBUILD} ; then
+        die 1 "rpmrebuild command not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function dialog_path
+#
+dialog_path() {
+
+    if _shqbin "dialog" ; then
+        _S_DIALOG=${_SHQBIN}/dialog 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_DIALOG=/usr/local/bin/dialog
+        [ -x "${_S_DIALOG}" ] || _S_DIALOG=/usr/local/bin/dialog
+        [ -x "${_S_DIALOG}" ] || _S_DIALOG=/usr/sfw/bin/dialog
+        [ -x "${_S_DIALOG}" ] || _S_DIALOG=/usr/xpg4/bin/dialog
+
+    else
+
+        _S_DIALOG=`which dialog 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_DIALOG}" ] || _S_DIALOG=/usr/bin/dialog
+    [ -x "${_S_DIALOG}" ] || _S_DIALOG=/bin/dialog
+
+    [ -x "${_S_DIALOG}" ] && return
+
+    _S_DIALOG=dialog 
+    
+    if ! _findbin ${_S_DIALOG} ; then
+        die 1 "dialog not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function ssh_path
+#
+ssh_path() {
+
+    if _shqbin "ssh" ; then
+        _S_SSH=${_SHQBIN}/ssh 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_SSH=/usr/local/bin/ssh
+        [ -x "${_S_SSH}" ] || _S_SSH=/usr/local/bin/ssh
+        [ -x "${_S_SSH}" ] || _S_SSH=/usr/sfw/bin/ssh
+        [ -x "${_S_SSH}" ] || _S_SSH=/usr/xpg4/bin/ssh
+
+    else
+
+        _S_SSH=`which ssh 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_SSH}" ] || _S_SSH=/usr/bin/ssh
+    [ -x "${_S_SSH}" ] || _S_SSH=/bin/ssh
+
+    [ -x "${_S_SSH}" ] && return
+
+    _S_SSH=ssh 
+    
+    if ! _findbin ${_S_SSH} ; then
+        die 1 "ssh not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function sshfs_path
+#
+sshfs_path() {
+
+    if _shqbin "sshfs" ; then
+        _S_SSHFS=${_SHQBIN}/sshfs 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_SSHFS=/usr/local/bin/sshfs
+        [ -x "${_S_SSHFS}" ] || _S_SSHFS=/usr/local/bin/sshfs
+        [ -x "${_S_SSHFS}" ] || _S_SSHFS=/usr/sfw/bin/sshfs
+        [ -x "${_S_SSHFS}" ] || _S_SSHFS=/usr/xpg4/bin/sshfs
+
+    else
+
+        _S_SSHFS=`which sshfs 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_SSHFS}" ] || _S_SSHFS=/usr/bin/sshfs
+    [ -x "${_S_SSHFS}" ] || _S_SSHFS=/bin/sshfs
+
+    [ -x "${_S_SSHFS}" ] && return
+
+    _S_SSHFS=sshfs 
+    
+    if ! _findbin ${_S_SSHFS} ; then
+        die 1 "sshfs not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function screen_path
+#
+screen_path() {
+
+    if _shqbin "screen" ; then
+        _S_SCREEN=${_SHQBIN}/screen 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_SCREEN=/usr/local/bin/screen
+        [ -x "${_S_SCREEN}" ] || _S_SCREEN=/usr/local/bin/screen
+        [ -x "${_S_SCREEN}" ] || _S_SCREEN=/usr/sfw/bin/screen
+        [ -x "${_S_SCREEN}" ] || _S_SCREEN=/usr/xpg4/bin/screen
+
+    else
+
+        _S_SCREEN=`which screen 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_SCREEN}" ] || _S_SCREEN=/usr/bin/screen
+    [ -x "${_S_SCREEN}" ] || _S_SCREEN=/bin/screen
+
+    [ -x "${_S_SCREEN}" ] && return
+
+    _S_SCREEN=screen 
+    
+    if ! _findbin ${_S_SCREEN} ; then
+        die 1 "screen not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function smart_path
+#
+smart_path() {
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        warn "smart command not available for ${_S_OS}"
+
+        return 1
+
+    else
+
+        if _shqbin "smart" ; then
+            _S_SMART=${_SHQBIN}/smart 
+            return
+        fi
+
+        _S_SMART=`which smart 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_SMART}" ] || _S_SMART=/usr/sbin/smart
+    [ -x "${_S_SMART}" ] || _S_SMART=/usr/bin/smart
+    [ -x "${_S_SMART}" ] || _S_SMART=/sbin/smart
+    [ -x "${_S_SMART}" ] || _S_SMART=/bin/smart
+
+    [ -x "${_S_SMART}" ] && return
+
+    _S_SMART=smart 
+    
+    if ! _findbin ${_S_SMART} ; then
+        die 1 "smart not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function nice_path
+#
+nice_path() {
+
+    if _shqbin "nice" ; then
+        _S_NICE=${_SHQBIN}/nice 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_NICE=/usr/local/bin/nice
+        [ -x "${_S_NICE}" ] || _S_NICE=/usr/sfw/bin/nice
+        [ -x "${_S_NICE}" ] || _S_NICE=/usr/xpg4/bin/nice
+
+    else
+
+        _S_NICE=`which nice 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_NICE}" ] || _S_NICE=/usr/bin/nice
+    [ -x "${_S_NICE}" ] || _S_NICE=/bin/nice
+
+    [ -x "${_S_NICE}" ] && return
+
+    _S_NICE=nice 
+    
+    if ! _findbin ${_S_NICE} ; then
+        die 1 "nice not found..."
+    fi
+
+}
+
+# }}}
+
+# {{{ function wget_path
+#
+wget_path() {
+
+    if _shqbin "wget" ; then
+        _S_WGET=${_SHQBIN}/wget 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_WGET=/usr/local/bin/wget
+        [ -x "${_S_WGET}" ] || _S_WGET=/usr/sfw/bin/wget
+        [ -x "${_S_WGET}" ] || _S_WGET=/usr/xpg4/bin/wget
+        [ -x "${_S_WGET}" ] || _S_WGET=/usr/locate/bin/wget-nossl
+        [ -x "${_S_WGET}" ] || _S_WGET=/usr/sfw/bin/wget-nossl
+        [ -x "${_S_WGET}" ] || _S_WGET=/usr/xpg4/bin/wget-nossl
+
+    else
+
+        _S_WGET=`which wget 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_WGET}" ] || _S_WGET=/usr/bin/wget
+    [ -x "${_S_WGET}" ] || _S_WGET=/bin/wget
+    [ -x "${_S_WGET}" ] || _S_WGET=/usr/bin/wget-nossl
+    [ -x "${_S_WGET}" ] || _S_WGET=/bin/wget-nossl
+
+    [ -x "${_S_WGET}" ] && return
+
+    _S_WGET=wget 
+    
+    if ! _findbin ${_S_WGET} ; then
+        die 1 "wget not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function sudo_path
+#
+sudo_path() {
+
+    if _shqbin "sudo" ; then
+        _S_SUDO=${_SHQBIN}/sudo 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_SUDO=/usr/local/bin/sudo
+        [ -x "${_S_SUDO}" ] || _S_SUDO=/usr/sfw/bin/sudo
+        [ -x "${_S_SUDO}" ] || _S_SUDO=/usr/xpg4/bin/sudo
+        [ -x "${_S_SUDO}" ] || _S_SUDO=`which sudo 2>/dev/null`
+
+    else
+
+        _S_SUDO=`which sudo 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_SUDO}" ] || _S_SUDO=/usr/sbin/sudo
+    [ -x "${_S_SUDO}" ] || _S_SUDO=/usr/bin/sudo
+    [ -x "${_S_SUDO}" ] || _S_SUDO=/sbin/sudo
+    [ -x "${_S_SUDO}" ] || _S_SUDO=/bin/sudo
+
+    [ -x "${_S_SUDO}" ] && return
+
+    _S_SUDO=sudo 
+    
+    if ! _findbin ${_S_SUDO} ; then
+        die 1 "sudo not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function lsof_path
+#
+lsof_path() {
+
+    if _shqbin "lsof" ; then
+        _S_LSOF=${_SHQBIN}/lsof 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_LSOF=/usr/local/bin/lsof
+        [ -x "${_S_LSOF}" ] || _S_LSOF=/usr/sfw/bin/lsof
+        [ -x "${_S_LSOF}" ] || _S_LSOF=/usr/xpg4/bin/lsof
+        [ -x "${_S_LSOF}" ] || _S_LSOF=`which lsof 2>/dev/null`
+
+    else
+
+        _S_LSOF=`which lsof 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_LSOF}" ] || _S_LSOF=/usr/sbin/lsof
+    [ -x "${_S_LSOF}" ] || _S_LSOF=/usr/bin/lsof
+    [ -x "${_S_LSOF}" ] || _S_LSOF=/sbin/lsof
+    [ -x "${_S_LSOF}" ] || _S_LSOF=/bin/lsof
+
+    [ -x "${_S_LSOF}" ] && return
+
+    _S_LSOF=lsof 
+    
+    if ! _findbin ${_S_LSOF} ; then
+        die 1 "lsof not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function cvs_path
+#
+cvs_path() {
+
+    if _shqbin "cvs" ; then
+        _S_CVS=${_SHQBIN}/cvs 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_CVS=/usr/local/bin/cvs
+        [ -x "${_S_SCREEN}" ] || _S_CVS=/usr/sfw/bin/cvs
+        [ -x "${_S_SCREEN}" ] || _S_CVS=/usr/xpg4/bin/cvs
+
+        [ -x "${_S_SCREEN}" ] || _S_CVS=`which cvs 2>/dev/null`
+
+    else
+
+        _S_CVS=`which cvs 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_SCREEN}" ] || _S_CVS=/usr/sbin/cvs
+    [ -x "${_S_SCREEN}" ] || _S_CVS=/usr/bin/cvs
+    [ -x "${_S_SCREEN}" ] || _S_CVS=/sbin/cvs
+    [ -x "${_S_SCREEN}" ] || _S_CVS=/bin/cvs
+
+    [ -x "${_S_CVS}" ] && return
+
+    _S_CVS=cvs 
+    
+    if ! _findbin ${_S_CVS} ; then
+        die 1 "cvs not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function tar_path
+#
+tar_path() {
+
+    if _shqbin "tar" ; then
+        _S_TAR=${_SHQBIN}/tar 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_TAR=/usr/local/bin/tar
+        [ -x "${_S_TAR}" ] || _S_TAR=/usr/local/bin/gtar
+        [ -x "${_S_TAR}" ] || _S_TAR=/usr/sfw/bin/tar
+        [ -x "${_S_TAR}" ] || _S_TAR=/usr/sfw/bin/gtar
+
+        [ -x "${_S_TAR}" ] || warn "GNU tar not found, trying to fall back to the BROKEN stock Sun version..."
+
+        [ -x "${_S_TAR}" ] || _S_TAR=/usr/xpg4/bin/tar
+        [ -x "${_S_TAR}" ] || _S_TAR=/usr/xpg4/bin/gtar
+
+    else
+
+        _S_TAR=`which tar 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_TAR}" ] || _S_TAR=/usr/sbin/tar
+    [ -x "${_S_TAR}" ] || _S_TAR=/usr/bin/tar
+    [ -x "${_S_TAR}" ] || _S_TAR=/sbin/tar
+    [ -x "${_S_TAR}" ] || _S_TAR=/bin/tar
+
+    [ -x "${_S_TAR}" ] && return
+
+    _S_TAR=tar 
+    
+    if ! _findbin ${_S_TAR} ; then
+        die 1 "tar not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function less_path
+#
+less_path() {
+
+    if _shqbin "less" ; then
+        _S_LESS=${_SHQBIN}/less 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_LESS=`which less 2>/dev/null`
+        [ -x "${_S_LESS}" ] || _S_LESS=/usr/local/bin/less
+        [ -x "${_S_LESS}" ] || _S_LESS=/usr/sfw/bin/less
+        [ -x "${_S_LESS}" ] || _S_LESS=/usr/xpg4/bin/less
+
+    else
+
+        _S_LESS=`which less 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_LESS}" ] || _S_LESS=/usr/bin/less
+    [ -x "${_S_LESS}" ] || _S_LESS=/bin/less
+
+    [ -x "${_S_LESS}" ] && return
+
+    _S_LESS=less 
+    
+    if ! _findbin ${_S_LESS} ; then
+        die 1 "less not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function sort_path
+#
+sort_path() {
+
+    if _shqbin "sort" ; then
+        _S_SORT=${_SHQBIN}/sort 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_SORT=/usr/local/bin/sort
+        [ -x "${_S_SORT}" ] || _S_SORT=/usr/local/bin/gsort
+        [ -x "${_S_SORT}" ] || _S_SORT=/usr/sfw/bin/gsort
+        [ -x "${_S_SORT}" ] || _S_SORT=/usr/sfw/bin/sort
+
+        [ -x "${_S_SORT}" ] || warn "GNU sort not found, trying to fall back to stock Sun version..."
+
+        [ -x "${_S_SORT}" ] || _S_SORT=/usr/xpg4/bin/sort
+
+    else
+
+        _S_SORT=`which sort 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_SORT}" ] || _S_SORT=/usr/bin/sort
+    [ -x "${_S_SORT}" ] || _S_SORT=/bin/sort
+
+    [ -x "${_S_SORT}" ] && return
+
+    _S_SORT=sort 
+    
+    if ! _findbin ${_S_SORT} ; then
+        die 1 "sort not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function perl_path
+#
+perl_path() {
+
+    _S_PERL=`which perl 2>/dev/null`
+
+    [ ! -x "${_S_PERL}" ] && die 1 "perl not found..."
+
+}
+# }}}
+
+# {{{ function chkconfig_path
+#
+chkconfig_path() {
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        warn "chkconfig command not available for ${_S_OS}"
+        return 1
+
+    else
+
+        if _shqbin "chkconfig" ; then
+            _S_CHKCONFIG=${_SHQBIN}/chkconfig 
+            return
+        fi
+
+
+        # chkconfig
+        #
+        _S_CHKCONFIG=`which chkconfig 2>/dev/null`
+
+    fi
+    
+    [ -x "${_S_CHKCONFIG}" ] || _S_CHKCONFIG="/bin/chkconfig"
+    [ -x "${_S_CHKCONFIG}" ] || _S_CHKCONFIG="/usr/bin/chkconfig"
+    [ -x "${_S_CHKCONFIG}" ] || _S_CHKCONFIG="/usr/local/bin/chkconfig"
+
+    [ -x "${_S_CHKCONFIG}" ] && return
+
+    _S_CHKCONFIG=chkconfig 
+    
+    if ! _findbin ${_S_CHKCONFIG} ; then
+        die 1 "chkconfig not found..."
+    fi
+
+
+}
+# }}}
+
+# {{{ function expr_path
+#
+expr_path() {
+
+    if _shqbin "expr" ; then
+        _S_EXPR=${_SHQBIN}/expr 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_EXPR=/usr/bin/expr
+        [ -x "${_S_EXPR}" ] || _S_EXPR=/usr/local/bin/expr
+        [ -x "${_S_EXPR}" ] || _S_EXPR=/usr/sfw/bin/expr
+        [ -x "${_S_EXPR}" ] || _S_EXPR=/usr/xpg4/bin/expr
+        [ -x "${_S_EXPR}" ] || _S_EXPR=/bin/expr
+
+    else
+
+        _S_EXPR=`which expr 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_EXPR}" ] && return
+
+    _S_EXPR=expr 
+    
+    if ! _findbin ${_S_EXPR} ; then
+        die 1 "expr not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function awk_path
+#
+awk_path() {
+
+    if _shqbin "awk" ; then
+        _S_AWK=${_SHQBIN}/awk 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_AWK=/usr/local/bin/awk
+        [ -x "${_S_AWK}" ] || _S_AWK=/usr/local/bin/gawk
+        [ -x "${_S_AWK}" ] || _S_AWK=/usr/sfw/bin/awk
+        [ -x "${_S_AWK}" ] || _S_AWK=/usr/sfw/bin/gawk
+
+        [ -x "${_S_AWK}" ] || warn "GNU awk not found, trying to fall back to stock Sun version..."
+
+        [ -x "${_S_AWK}" ] || _S_AWK=/usr/xpg4/bin/awk
+
+    else
+
+        _S_AWK=`which awk 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_AWK}" ] || _S_AWK=/bin/awk
+    [ -x "${_S_AWK}" ] || _S_AWK=/usr/bin/awk
+
+    [ -x "${_S_AWK}" ] && return
+
+    _S_AWK=awk 
+    
+    if ! _findbin ${_S_AWK} ; then
+        die 1 "awk not found..."
+    fi
+
+}
+
+# }}}
+
+# {{{ function grep_path
+#
+grep_path() {
+
+    if _shqbin "grep" ; then
+        _S_GREP=${_SHQBIN}/grep
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_GREP=/usr/sfw/bin/gegrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/local/bin/gegrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/xpg4/bin/gegrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/bin/gegrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/bin/gegrep
+
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/local/bin/ggrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/xpg4/bin/ggrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/bin/ggrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/bin/ggrep
+
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/local/bin/egrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/local/bin/grep
+
+        [ -x "${_S_GREP}" ] || warn "GNU grep not found, trying to fall back to stock Sun version..."
+
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/xpg4/bin/egrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/bin/egrep
+        [ -x "${_S_GREP}" ] || _S_GREP=/bin/egrep
+
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/xpg4/bin/grep
+        [ -x "${_S_GREP}" ] || _S_GREP=/usr/bin/grep
+        [ -x "${_S_GREP}" ] || _S_GREP=/bin/grep
+
+    else
+
+        _S_GREP=`which grep 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_GREP}" ] && return
+
+    _S_GREP=grep 
+    
+    if ! _findbin ${_S_GREP} ; then
+        die 1 "grep not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function head_path
+#
+head_path() {
+
+    if _shqbin "head" ; then
+        _S_HEAD=${_SHQBIN}/head
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_HEAD=/usr/local/bin/head
+        [ -x "${_S_HEAD}" ] || _S_HEAD=/usr/sfw/bin/head
+        [ -x "${_S_HEAD}" ] || _S_HEAD=/usr/xpg4/bin/head
+
+    else
+
+        _S_HEAD=`which head 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_HEAD}" ] || _S_HEAD=/usr/bin/head
+    [ -x "${_S_HEAD}" ] || _S_HEAD=/bin/head
+
+    [ -x "${_S_HEAD}" ] && return
+
+    _S_HEAD=head 
+    
+    if ! _findbin ${_S_HEAD} ; then
+        die 1 "head not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function stty_path
+#
+stty_path() {
+
+    if _shqbin "stty" ; then
+        _S_STTY=${_SHQBIN}/stty
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_STTY=/usr/local/bin/stty
+        [ -x "${_S_STTY}" ] || _S_STTY=/usr/xpg4/bin/stty
+        [ -x "${_S_STTY}" ] || _S_STTY=/usr/sfw/bin/stty
+
+    else
+
+        _S_STTY=`which stty 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_STTY}" ] || _S_STTY=/usr/bin/stty
+    [ -x "${_S_STTY}" ] || _S_STTY=/bin/stty
+
+    [ -x "${_S_STTY}" ] && return
+
+    _S_STTY=stty 
+    
+    if ! _findbin ${_S_STTY} ; then
+        die 1 "stty not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function locate_path
+#
+locate_path() {
+
+    if _shqbin "locate" ; then
+        _S_LOCATE=${_SHQBIN}/locate
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_LOCATE=/usr/local/bin/locate
+        [ -x "${_S_LOCATE}" ] || _S_LOCATE=/usr/local/bin/glocate
+        [ -x "${_S_LOCATE}" ] || _S_LOCATE=/usr/sfw/bin/locate
+        [ -x "${_S_LOCATE}" ] || _S_LOCATE=/usr/sfw/bin/glocate
+
+        [ -x "${_S_LOCATE}" ] || warn "GNU locate not found, trying to fall back to stock Sun version..."
+
+        [ -x "${_S_LOCATE}" ] || _S_LOCATE=/usr/xpg4/bin/locate
+
+    else
+
+        _S_LOCATE=`which locate 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_LOCATE}" ] || _S_LOCATE=/usr/bin/locate
+    [ -x "${_S_LOCATE}" ] || _S_LOCATE=/bin/locate
+
+    [ -x "${_S_LOCATE}" ] && return
+
+    _S_LOCATE=locate 
+    
+    if ! _findbin ${_S_LOCATE} ; then
+        die 1 "locate not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function mv_path
+#
+mv_path() {
+
+    if _shqbin "mv" ; then
+        _S_MV=${_SHQBIN}/mv
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_MV=/usr/local/bin/mv
+        [ -x "${_S_MV}" ] || _S_MV=/usr/sfw/bin/mv
+        [ -x "${_S_MV}" ] || _S_MV=`which mv 2>/dev/null`
+
+    else
+
+        _S_MV=`which mv 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_MV}" ] || _S_MV=/usr/bin/mv
+    [ -x "${_S_MV}" ] || _S_MV=/bin/mv
+
+    [ -x "${_S_MV}" ] && return
+
+    _S_MV=mv 
+    
+    if ! _findbin ${_S_MV} ; then
+        die 1 "mv not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function frcode_path
+#
+frcode_path() {
+
+    if _shqbin "frcode" ; then
+        _S_FRCODE=${_SHQBIN}/frcode
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_FRCODE=/usr/local/libexec/frcode
+
+    else
+
+        # frcode
+        #
+        _S_FRCODE=`which frcode 2>/dev/null`
+
+        [ -x "${_S_FRCODE}" ] || _S_FRCODE="/usr/lib64/find/frcode"
+        [ -x "${_S_FRCODE}" ] || _S_FRCODE="/bin/frcode"
+        [ -x "${_S_FRCODE}" ] || _S_FRCODE="/usr/bin/frcode"
+        [ -x "${_S_FRCODE}" ] || _S_FRCODE="/usr/local/bin/frcode"
+        [ -x "${_S_FRCODE}" ] || _S_FRCODE="frcode"
+
+    fi
+
+    [ -x "${_S_FRCODE}" ] && return
+
+    _S_FRCODE=frcode 
+    
+    if ! _findbin ${_S_FRCODE} ; then
+        die 1 "frcode not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function pcregrep_path
+#
+pcregrep_path() {
+
+    if _shqbin "pcregrep" ; then
+        _S_PCREGREP=${_SHQBIN}/pcregrep
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_PGREP=/usr/local/bin/pcregrep
+        [ -x "${_S_PGREP}" ] || _S_PGREP="/usr/sfw/bin/pcregrep"
+        [ -x "${_S_PGREP}" ] || _S_PGREP="/usr/xpg4/bin/pcregrep"
+
+    else
+
+        _S_PGREP=`which pcregrep 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_PGREP}" ] || _S_PGREP="/usr/bin/pcregrep"
+    [ -x "${_S_PGREP}" ] || _S_PGREP="/bin/pcregrep"
+
+    [ -x "${_S_PGREP}" ] && return
+
+    _S_PGREP=pcregrep 
+    
+    if ! _findbin ${_S_PGREP} ; then
+        die 1 "pcregrep not found"
+    fi
+
+}
+# }}}
+
+# {{{ function pwd_path
+#
+pwd_path() {
+
+    if _shqbin "pwd" ; then
+        _S_PWD=${_SHQBIN}/pwd
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_PWD=/usr/local/bin/pwd
+        [ -x "${_S_PWD}" ] || _S_PWD=/usr/sfw/bin/pwd
+        [ -x "${_S_PWD}" ] || _S_PWD=/usr/xpg4/bin/pwd
+
+    else
+
+        # pwd
+        #
+        _S_PWD=`which pwd 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_PWD}" ] || _S_PWD=/bin/pwd
+    [ -x "${_S_PWD}" ] || _S_PWD=/usr/bin/pwd
+
+    [ -x "${_S_PWD}" ] && return
+
+    _S_PWD=pwd 
+    
+    if ! _findbin ${_S_PWD} ; then
+        die 1 "pwd not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function dig_path
+#
+dig_path() {
+
+    if _shqbin "dig" ; then
+        _S_DIG=${_SHQBIN}/dig
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_DIG=/usr/local/bin/dig
+        [ -x "${_S_DIG}" ] || _S_DIG=/usr/sfw/bin/dig
+        [ -x "${_S_DIG}" ] || _S_DIG=/usr/xpg4/bin/dig
+        [ -x "${_S_DIG}" ] || _S_DIG=/usr/bin/dig
+        [ -x "${_S_DIG}" ] || _S_DIG=/bin/dig
+
+    else
+
+        _S_DIG=`which dig 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_DIG}" ] && return
+
+    _S_DIG=dig 
+    
+    if ! _findbin ${_S_DIG} ; then
+        die 1 "dig not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function co_path
+#
+# The RCS checkout command
+#
+co_path() {
+
+    if _shqbin "co" ; then
+        _S_CO=${_SHQBIN}/co
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_CO=/usr/local/bin/co
+        [ -x "${_S_CO}" ] || _S_CO=/usr/local/bin/co
+        [ -x "${_S_CO}" ] || _S_CO=/usr/sfw/bin/co
+        [ -x "${_S_CO}" ] || _S_CO=/usr/xpg4/bin/co
+
+    else
+
+        _S_CO=`which co 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_CO}" ] || _S_CO=/usr/bin/co
+    [ -x "${_S_CO}" ] || _S_CO=/bin/co
+
+    [ -x "${_S_CO}" ] && return
+
+    _S_CO=co 
+    
+    if ! _findbin ${_S_CO} ; then
+        die 1 "co not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function ci_path
+#
+# The RCS checkout command
+#
+ci_path() {
+
+    if _shqbin "ci" ; then
+        _S_CI=${_SHQBIN}/ci
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_CI=/usr/local/bin/ci
+        [ -x "${_S_CI}" ] || _S_CI=/usr/local/bin/ci
+        [ -x "${_S_CI}" ] || _S_CI=/usr/sfw/bin/ci
+        [ -x "${_S_CI}" ] || _S_CI=/usr/xpg4/bin/ci
+
+    else
+
+        _S_CI=`which ci 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_CI}" ] || _S_CI=/usr/bin/ci
+    [ -x "${_S_CI}" ] || _S_CI=/bin/ci
+
+    [ -x "${_S_CI}" ] && return
+
+    _S_CI=ci 
+    
+    if ! _findbin ${_S_CI} ; then
+        die 1 "ci not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function openssl_path
+#
+# The openssl command
+#
+openssl_path() {
+
+    if _shqbin "openssl" ; then
+        _S_OPENSSL=${_SHQBIN}/openssl
+        return
+    fi
+
+    _S_OPENSSL=/usr/local/ssl/bin/openssl
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        [ -x "${_S_OPENSSL}" ] || _S_OPENSSL=/usr/local/bin/openssl
+        [ -x "${_S_OPENSSL}" ] || _S_OPENSSL=/usr/sfw/bin/openssl
+        [ -x "${_S_OPENSSL}" ] || _S_OPENSSL=/usr/xpg4/bin/openssl
+
+    else
+
+        [ -x "${_S_OPENSSL}" ] || _S_OPENSSL=`which openssl 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_OPENSSL}" ] || _S_OPENSSL=/usr/bin/openssl
+    [ -x "${_S_OPENSSL}" ] || _S_OPENSSL=/bin/openssl
+
+    [ -x "${_S_OPENSSL}" ] && return
+
+    _S_OPENSSL=openssl 
+    
+    if ! _findbin ${_S_OPENSSL} ; then
+        die 1 "openssl not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function date_path
+#
+date_path() {
+
+    if _shqbin "date" ; then
+        _S_DATE=${_SHQBIN}/date 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_DATE=/usr/xpg4/bin/date
+        [ -x "${_S_DATE}" ] || _S_DATE=/usr/local/bin/date
+        [ -x "${_S_DATE}" ] || _S_DATE=/usr/sfw/bin/date
+
+    else
+
+        _S_DATE=`which date 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_DATE}" ] || _S_DATE=/usr/bin/date
+    [ -x "${_S_DATE}" ] || _S_DATE=/bin/date
+
+    [ -x "${_S_DATE}" ] && return
+    
+    _S_DATE=date
+
+    if ! _findbin ${_S_DATE} ; then
+        die 1 "date not found..."
+    fi
+
+}
+# }}}
+
+# {{{ function common_bin_paths
+#
+common_bin_paths() {
+
+    sudo_path
+    cvs_path
+    tar_path
+    sort_path
+    perl_path
+    expr_path
+    sed_path
+    find_path
+    xargs_path
+    awk_path
+    grep_path
+    head_path
+    stty_path
+    locate_path
+    mv_path
+    frcode_path
+    pcregrep_path
+    pwd_path
+
+}
+# }}}
+
+# {{{ function _path
+#
+# (ignoring this for now...)
+#
+_path() {
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_CVS=/usr/local/bin/cvs
+        _S_FRCODE=/usr/local/libexec/frcode
+        _S_GREP=/usr/sfw/bin/gegrep
+        _S_LOCATE=/usr/local/bin/locate
+        _S_MV=/usr/bin/mv
+        _S_SUDO=/usr/local/bin/sudo
+
+    else
+
+        _S_GREP=`which grep 2>/dev/null`
+        [ -x "${_S_GREP}" ] || die 1 "grep not found..."
+
+        _S_HEAD=`which head 2>/dev/null`
+        [ -x "${_S_HEAD}" ] || die 1 "head not found..."
+
+        _S_STTY=`which stty 2>/dev/null`
+        [ -x "${_S_STTY}" ] || die 1 "stty not found..."
+
+        _S_LOCATE=`which glocate 2>/dev/null`
+        if [ ! -x "${_S_LOCATE}" ] ; then
+            _S_LOCATE=`which locate 2>/dev/null`
+            [ ! -x "${_S_LOCATE}" ] && die 1 "locate not found..."
+        fi
+
+        _S_MV=`which mv 2>/dev/null`
+        [ ! -x "${_S_MV}" ] && die 1 "mv not found..."
+
+        # Other commands that are ok to be missing...
+        #
+
+        # frcode
+        #
+        _S_FRCODE=`which frcode 2>/dev/null`
+        [ ! -x "${_S_FRCODE}" ] && _S_FRCODE="/usr/lib64/find/frcode"
+        [ ! -x "${_S_FRCODE}" ] && _S_FRCODE="/bin/frcode"
+        [ ! -x "${_S_FRCODE}" ] && _S_FRCODE="/usr/bin/frcode"
+        [ ! -x "${_S_FRCODE}" ] && _S_FRCODE="/usr/local/bin/frcode"
+        [ ! -x "${_S_FRCODE}" ] && _S_FRCODE="frcode"
+
+        # pcregrep
+        #
+        _S_PG=`which pcregrep 2>/dev/null`
+        [ ! -x "${_S_PG}" ] && _S_PG="/bin/pcregrep"
+        [ ! -x "${_S_PG}" ] && _S_PG="/usr/bin/pcregrep"
+        [ ! -x "${_S_PG}" ] && _S_PG="/usr/local/bin/pcregrep"
+        [ ! -x "${_S_PG}" ] && _S_PG="pcregrep"
+
+        # pwd
+        #
+        _S_PWD=`which pwd 2>/dev/null`
+        [ ! -x "${_S_PWD}" ] && _S_PWD="/bin/pwd"
+        [ ! -x "${_S_PWD}" ] && _S_PWD="/usr/bin/pwd"
+        [ ! -x "${_S_PWD}" ] && _S_PWD="/usr/local/bin/pwd"
+        [ ! -x "${_S_PWD}" ] && _S_PWD="pwd"
+
+    fi
+
+}
+# }}}
+
+# }}}
+
+ME=${ME:-`basename $0`}
+DATE=`date +%Y%m%d%H%M%S`
+DATESTAMP=${_DATE}
+
+# {{{ function root_or_sudo
+#
+root_or_sudo() {
+
+    id_path
+    sudo_path
+
+    SELF="`${_S_ID} -un`"
+
+    #
+    # run as root
+    #
+    if [ "${SELF}" != "root" ] ; then
+
+        if [ -z "${_S_SUDO}" ] || [ ! -x "${_S_SUDO}" ] ; then
+            die 1 "Please run script ${ME} as root instead of ${SELF}..."
+        else
+            ${_S_SUDO} -v
+        fi
+
+    fi
+
+}
+# }}}
+
+# {{{ function root_only
+#
+root_only() {
+
+    id_path
+
+    SELF="`${_S_ID} -un`"
+
+    #
+    # run as root
+    #
+    if [ "$SELF" != "root" ] ; then
+        die 1 "Please run script ${ME} as root instead of ${SELF}..."
+    fi
+
+}
+# }}}
+
+# {{{ get_term_size
+#
+get_term_size() {
+
+    stty_path
+    awk_path
+
+    sttySIZE=`${_S_STTY} size`
+
+    _S_HEIGHT=`echo $sttySIZE | ${_S_AWK} '{print $1}'`
+    _S_WIDTH=`echo $sttySIZE | ${_S_AWK} '{print $2}'`
+
+    export _S_HEIGHT _S_WIDTH
+
+}
+# }}}
+
+[ -n "${VERBOSE}" ] && echo .shQuery sourced...
+
+export _SHQUERY_SOURCED=true
+
