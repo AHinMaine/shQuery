@@ -1769,6 +1769,45 @@ date_path() {
 }
 # }}}
 
+# {{{ function apachectl_path
+#
+apachectl_path() {
+
+    if _shqbin "apachectl" ; then
+        _S_APACHECTL=${_SHQBIN}/apachectl 
+        return
+    fi
+
+    if [ "${_S_OS}" = "SunOS" ] ; then
+
+        _S_APACHECTL=/usr/xpg4/bin/apachectl
+        [ -x "${_S_APACHECTL}" ] || _S_ID=/usr/local/bin/apachectl
+        [ -x "${_S_APACHECTL}" ] || _S_ID=/usr/sfw/bin/apachectl
+
+    else
+
+        _S_APACHECTL=`which apachectl 2>/dev/null`
+
+    fi
+
+    [ -x "${_S_APACHECTL}" ] || _S_APACHECTL=/bin/apachectl
+    [ -x "${_S_APACHECTL}" ] || _S_APACHECTL=/usr/bin/apachectl
+    [ -x "${_S_APACHECTL}" ] || _S_APACHECTL=/usr/sbin/apachectl
+    [ -x "${_S_APACHECTL}" ] || _S_APACHECTL=/usr/apache/bin/apachectl
+    [ -x "${_S_APACHECTL}" ] || _S_APACHECTL=/usr/apache2/bin/apachectl
+    [ -x "${_S_APACHECTL}" ] || _S_APACHECTL=/usr/local/apache/bin/apachectl
+
+    [ -x "${_S_APACHECTL}" ] && return
+    
+    _S_APACHECTL=apachectl
+
+    if ! _findbin ${_S_APACHECTL} ; then
+        die 1 "apachectl not found..."
+    fi
+
+}
+# }}}
+
 # {{{ function common_bin_paths
 #
 common_bin_paths() {
