@@ -1904,7 +1904,7 @@ _path() {
 
 # }}}
 
-ME=${ME:-`basename $0`}
+ME=${ME:-`basename -- "$0"`}
 DATE=`date +%Y%m%d%H%M%S`
 DATESTAMP=${_DATE}
 
